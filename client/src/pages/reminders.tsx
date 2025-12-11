@@ -32,7 +32,9 @@ export default function RemindersPage() {
         params.append("type", typeFilter);
       }
       const url = `/api/reminders${params.toString() ? `?${params.toString()}` : ""}`;
-      return apiRequest<Reminder[]>(url);
+      const res = await fetch(url, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch reminders");
+      return res.json();
     },
   });
 
@@ -81,9 +83,8 @@ export default function RemindersPage() {
 
   const handleDispatch = async () => {
     try {
-      const result = await apiRequest<{ count: number }>("/api/reminders/dispatch", {
-        method: "POST",
-      });
+      const res = await apiRequest("POST", "/api/reminders/dispatch");
+      const result = await res.json();
       
       toast({
         title: "Dispatcher executado",
