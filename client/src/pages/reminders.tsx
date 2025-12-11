@@ -75,7 +75,7 @@ export default function RemindersPage() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
-      await apiRequest(`/api/reminders/${id}`, { method: "DELETE" });
+      await apiRequest("DELETE", `/api/reminders/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/reminders"] });

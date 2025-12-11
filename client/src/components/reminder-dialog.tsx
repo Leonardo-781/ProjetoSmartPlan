@@ -99,10 +99,8 @@ export function ReminderDialog({
 
   const createMutation = useMutation({
     mutationFn: async (data: FormData) => {
-      return await apiRequest<Reminder>("/api/reminders", {
-        method: "POST",
-        body: JSON.stringify(data),
-      });
+      const res = await apiRequest("POST", "/api/reminders", data);
+      return await res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/reminders"] });
@@ -124,10 +122,8 @@ export function ReminderDialog({
 
   const updateMutation = useMutation({
     mutationFn: async (data: FormData) => {
-      return await apiRequest<Reminder>(`/api/reminders/${reminder?.id}`, {
-        method: "PUT",
-        body: JSON.stringify(data),
-      });
+      const res = await apiRequest("PUT", `/api/reminders/${reminder?.id}`, data);
+      return await res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/reminders"] });
