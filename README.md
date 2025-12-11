@@ -52,6 +52,7 @@ npm install
 DATABASE_URL=postgresql://user:password@localhost:5432/dbname
 SESSION_SECRET=your-secret-key-here
 PORT=5000
+ENABLE_REMINDERS=true  # Habilita o módulo de lembretes (opcional, padrão: true)
 ```
 
 4. Execute as migrações do banco de dados:
@@ -199,6 +200,9 @@ O dispatcher é responsável por encontrar lembretes que precisam ser notificado
 
 **Execução Manual:**
 ```bash
+# Via npm script
+npm run reminders:dispatch
+
 # Via API
 curl -X POST http://localhost:5000/api/reminders/dispatch \
   --cookie "connect.sid=your-session-cookie"

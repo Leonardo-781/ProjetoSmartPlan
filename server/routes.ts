@@ -218,8 +218,19 @@ export async function registerRoutes(
     res.json({ ok: true });
   });
 
+  // Reminders middleware
+  const checkRemindersEnabled = (req: Request, res: Response) => {
+    const enabled = process.env.ENABLE_REMINDERS !== "false";
+    if (!enabled) {
+      res.status(403).json({ detail: "Reminders module is disabled" });
+      return false;
+    }
+    return true;
+  };
+
   // Reminders
   app.get("/api/reminders", async (req: Request, res: Response) => {
+    if (!checkRemindersEnabled(req, res)) return;
     const uid = checkAuth(req, res);
     if (!uid) return;
     
@@ -233,6 +244,7 @@ export async function registerRoutes(
   });
 
   app.post("/api/reminders", async (req: Request, res: Response) => {
+    if (!checkRemindersEnabled(req, res)) return;
     const uid = checkAuth(req, res);
     if (!uid) return;
     
@@ -257,6 +269,7 @@ export async function registerRoutes(
   });
 
   app.get("/api/reminders/:id", async (req: Request, res: Response) => {
+    if (!checkRemindersEnabled(req, res)) return;
     const uid = checkAuth(req, res);
     if (!uid) return;
     
@@ -269,6 +282,7 @@ export async function registerRoutes(
   });
 
   app.put("/api/reminders/:id", async (req: Request, res: Response) => {
+    if (!checkRemindersEnabled(req, res)) return;
     const uid = checkAuth(req, res);
     if (!uid) return;
     
@@ -292,6 +306,7 @@ export async function registerRoutes(
   });
 
   app.delete("/api/reminders/:id", async (req: Request, res: Response) => {
+    if (!checkRemindersEnabled(req, res)) return;
     const uid = checkAuth(req, res);
     if (!uid) return;
     
@@ -305,6 +320,7 @@ export async function registerRoutes(
   });
 
   app.get("/api/reminders/:id/export.ics", async (req: Request, res: Response) => {
+    if (!checkRemindersEnabled(req, res)) return;
     const uid = checkAuth(req, res);
     if (!uid) return;
     
@@ -322,6 +338,7 @@ export async function registerRoutes(
   });
 
   app.post("/api/reminders/dispatch", async (req: Request, res: Response) => {
+    if (!checkRemindersEnabled(req, res)) return;
     const uid = checkAuth(req, res);
     if (!uid) return;
     
