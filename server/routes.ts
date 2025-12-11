@@ -1,6 +1,8 @@
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
+import { generateICS } from "./ics-generator";
+import { insertReminderSchema } from "@shared/schema";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -216,6 +218,145 @@ export async function registerRoutes(
     if (!uid) return;
     await storage.deleteGoal(parseInt(req.params.id));
     res.json({ ok: true });
+  });
+
+  // Reminders
+  app.get("/api/reminders", async (req: Request, res: Response) => {
+    const uid = checkAuth(req, res);
+    if (!uid) return;
+    
+    const filters: { type?: string; start?: Date; end?: Date } = {};
+    if (req.query.type) filters.type = req.query.type as string;
+    if (req.query.start) filters.start = new Date(req.query.start as string);
+    if (req.query.end) filters.end = new Date(req.query.end as string);
+    
+    const reminders = await storage.getReminders(uid, filters);
+    res.json(reminders);
+  });
+
+  app.post("/api/reminders", async (req: Request, res: Response) => {
+    const uid = checkAuth(req, res);
+    if (!uid) return;
+    
+    try {
+      // Validate request body
+      const validatedData = insertReminderSchema.parse(req.body);
+      const reminder = await storage.createReminder({ ...validatedData, userId: uid });
+      res.json(reminder);
+    } catch (error: any) {
+      return res.status(400).json({ detail: error.message || "Invalid reminder data" });
+    }
+  });
+
+  app.get("/api/reminders/:id", async (req: Request, res: Response) => {
+    const uid = checkAuth(req, res);
+    if (!uid) return;
+    
+    const reminder = await storage.getReminder(req.params.id);
+    if (!reminder) {
+      return res.status(404).json({ detail: "Reminder not found" });
+    }
+    if (reminder.userId !== uid) {
+      return res.status(403).json({ detail: "Forbidden" });
+    }
+    res.json(reminder);
+  });
+
+  app.put("/api/reminders/:id", async (req: Request, res: Response) => {
+    const uid = checkAuth(req, res);
+    if (!uid) return;
+    
+    const reminder = await storage.getReminder(req.params.id);
+    if (!reminder) {
+      return res.status(404).json({ detail: "Reminder not found" });
+    }
+    if (reminder.userId !== uid) {
+      return res.status(403).json({ detail: "Forbidden" });
+    }
+    
+    try {
+      // Validate partial update
+      const validatedData = insertReminderSchema.partial().parse(req.body);
+      const updated = await storage.updateReminder(req.params.id, validatedData);
+      res.json(updated);
+    } catch (error: any) {
+      return res.status(400).json({ detail: error.message || "Invalid reminder data" });
+    }
+  });
+
+  app.delete("/api/reminders/:id", async (req: Request, res: Response) => {
+    const uid = checkAuth(req, res);
+    if (!uid) return;
+    
+    const reminder = await storage.getReminder(req.params.id);
+    if (!reminder) {
+      return res.status(404).json({ detail: "Reminder not found" });
+    }
+    if (reminder.userId !== uid) {
+      return res.status(403).json({ detail: "Forbidden" });
+    }
+    
+    await storage.deleteReminder(req.params.id);
+    res.json({ ok: true });
+  });
+
+  app.get("/api/reminders/:id/export.ics", async (req: Request, res: Response) => {
+    const uid = checkAuth(req, res);
+    if (!uid) return;
+    
+    const reminder = await storage.getReminder(req.params.id);
+    if (!reminder) {
+      return res.status(404).json({ detail: "Reminder not found" });
+    }
+    if (reminder.userId !== uid) {
+      return res.status(403).json({ detail: "Forbidden" });
+    }
+    
+    const icsContent = generateICS(reminder);
+    const filename = `reminder-${reminder.id}.ics`;
+    
+    res.setHeader('Content-Type', 'text/calendar; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(icsContent);
+  });
+
+  app.post("/api/reminders/dispatch", async (req: Request, res: Response) => {
+    const uid = checkAuth(req, res);
+    if (!uid) return;
+    
+    const now = new Date();
+    const remindersToNotify = await storage.getRemindersForDispatch(now);
+    
+    const notified = [];
+    for (const reminder of remindersToNotify) {
+      // Check if already notified in this window
+      const dueAt = new Date(reminder.dueAt);
+      const notifyAt = new Date(dueAt.getTime() - reminder.remindBeforeMinutes * 60000);
+      const windowEnd = new Date(dueAt.getTime() + 60000);
+      
+      const alreadyNotified = await storage.hasNotificationInWindow(
+        reminder.id,
+        notifyAt,
+        windowEnd
+      );
+      
+      if (!alreadyNotified) {
+        await storage.createReminderNotification({ reminderId: reminder.id });
+        console.log(`[REMINDER NOTIFICATION] ${reminder.type} - ${reminder.title} - Due: ${reminder.dueAt}`);
+        notified.push({
+          id: reminder.id,
+          title: reminder.title,
+          type: reminder.type,
+          dueAt: reminder.dueAt,
+        });
+      }
+    }
+    
+    res.json({
+      dispatched_at: now.toISOString(),
+      count: notified.length,
+      reminders: notified,
+    });
   });
 
   return httpServer;
