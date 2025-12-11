@@ -36,17 +36,19 @@ import type { Reminder } from "@shared/schema";
 import type { CreateReminderData, ReminderFilters } from "@/api/reminders";
 import { queryClient } from "@/lib/queryClient";
 
+type TypeFilter = "all" | "exam_assignment" | "work_meeting";
+
 export default function RemindersPage() {
   const { toast } = useToast();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingReminder, setEditingReminder] = useState<Reminder | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [reminderToDelete, setReminderToDelete] = useState<string | null>(null);
-  const [typeFilter, setTypeFilter] = useState<string>("all");
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
 
   const filters: ReminderFilters = {};
   if (typeFilter !== "all") {
-    filters.type = typeFilter as any;
+    filters.type = typeFilter;
   }
 
   const { data: reminders = [], isLoading } = useQuery({
@@ -64,10 +66,11 @@ export default function RemindersPage() {
         description: "O lembrete foi criado com sucesso.",
       });
     },
-    onError: (error: Error) => {
+    onError: (error: unknown) => {
+      const message = error instanceof Error ? error.message : "Erro desconhecido";
       toast({
         title: "Erro ao criar lembrete",
-        description: error.message,
+        description: message,
         variant: "destructive",
       });
     },
@@ -85,10 +88,11 @@ export default function RemindersPage() {
         description: "O lembrete foi atualizado com sucesso.",
       });
     },
-    onError: (error: Error) => {
+    onError: (error: unknown) => {
+      const message = error instanceof Error ? error.message : "Erro desconhecido";
       toast({
         title: "Erro ao atualizar lembrete",
-        description: error.message,
+        description: message,
         variant: "destructive",
       });
     },
@@ -105,10 +109,11 @@ export default function RemindersPage() {
         description: "O lembrete foi excluído com sucesso.",
       });
     },
-    onError: (error: Error) => {
+    onError: (error: unknown) => {
+      const message = error instanceof Error ? error.message : "Erro desconhecido";
       toast({
         title: "Erro ao excluir lembrete",
-        description: error.message,
+        description: message,
         variant: "destructive",
       });
     },
@@ -139,10 +144,11 @@ export default function RemindersPage() {
         title: "Exportado com sucesso",
         description: "O arquivo .ics foi baixado.",
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Erro desconhecido";
       toast({
         title: "Erro ao exportar",
-        description: error.message,
+        description: message,
         variant: "destructive",
       });
     }

@@ -29,6 +29,14 @@ interface ReminderFormProps {
   isLoading?: boolean;
 }
 
+function isValidReminderType(value: string): value is "exam_assignment" | "work_meeting" {
+  return value === "exam_assignment" || value === "work_meeting";
+}
+
+function isValidRepeatType(value: string): value is "none" | "daily" | "weekly" | "monthly" {
+  return value === "none" || value === "daily" || value === "weekly" || value === "monthly";
+}
+
 export function ReminderForm({
   initialData,
   onSubmit,
@@ -38,7 +46,7 @@ export function ReminderForm({
   const [title, setTitle] = useState(initialData?.title || "");
   const [description, setDescription] = useState(initialData?.description || "");
   const [type, setType] = useState<"exam_assignment" | "work_meeting">(
-    initialData?.type as any || "exam_assignment"
+    (initialData?.type && isValidReminderType(initialData.type)) ? initialData.type : "exam_assignment"
   );
   const [dueDate, setDueDate] = useState<Date | undefined>(
     initialData?.dueAt ? new Date(initialData.dueAt) : undefined
@@ -52,7 +60,7 @@ export function ReminderForm({
     initialData?.remindBeforeMinutes?.toString() || "30"
   );
   const [repeat, setRepeat] = useState<"none" | "daily" | "weekly" | "monthly">(
-    initialData?.repeat as any || "none"
+    (initialData?.repeat && isValidRepeatType(initialData.repeat)) ? initialData.repeat : "none"
   );
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -99,7 +107,14 @@ export function ReminderForm({
 
       <div>
         <Label htmlFor="type">Tipo</Label>
-        <Select value={type} onValueChange={(v: any) => setType(v)}>
+        <Select 
+          value={type} 
+          onValueChange={(v) => {
+            if (isValidReminderType(v)) {
+              setType(v);
+            }
+          }}
+        >
           <SelectTrigger>
             <SelectValue />
           </SelectTrigger>
@@ -169,7 +184,14 @@ export function ReminderForm({
 
       <div>
         <Label htmlFor="repeat">Repetir</Label>
-        <Select value={repeat} onValueChange={(v: any) => setRepeat(v)}>
+        <Select 
+          value={repeat} 
+          onValueChange={(v) => {
+            if (isValidRepeatType(v)) {
+              setRepeat(v);
+            }
+          }}
+        >
           <SelectTrigger>
             <SelectValue />
           </SelectTrigger>

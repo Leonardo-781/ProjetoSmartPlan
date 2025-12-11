@@ -1,6 +1,7 @@
 import { type User, type Discipline, type Event, type Task, type StudyGoal, type Reminder, type ReminderNotification } from "@shared/schema";
 import { randomUUID } from "crypto";
 import bcrypt from "bcryptjs";
+import { ONE_MINUTE_MS } from "./constants";
 
 export interface IStorage {
   // Users
@@ -272,7 +273,6 @@ export class MemStorage implements IStorage {
   }
 
   async getRemindersForDispatch(now: Date): Promise<Reminder[]> {
-    const ONE_MINUTE_MS = 60 * 1000;
     return Array.from(this.reminders.values()).filter((r) => {
       if (!r.dueAt) return false;
       const remindTime = new Date(r.dueAt.getTime() - r.remindBeforeMinutes * ONE_MINUTE_MS);

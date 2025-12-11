@@ -1,4 +1,5 @@
 import { storage } from "../storage";
+import { ONE_MINUTE_MS } from "../constants";
 
 /**
  * Reminder Dispatcher Job
@@ -24,7 +25,6 @@ export async function dispatchReminders(): Promise<void> {
       const existingNotifications = await storage.getReminderNotifications(reminder.id);
       
       // Avoid duplicate notifications within the same minute
-      const ONE_MINUTE_MS = 60 * 1000;
       const recentNotification = existingNotifications.find((n) => {
         if (!n.notifiedAt) return false;
         const diff = now.getTime() - n.notifiedAt.getTime();
