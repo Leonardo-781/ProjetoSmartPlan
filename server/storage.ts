@@ -1,4 +1,4 @@
-import { type User, type Discipline, type Event, type Task, type StudyGoal } from "@shared/schema";
+import { type User, type Discipline, type Event, type Task, type StudyGoal, type Reminder, type ReminderNotification } from "@shared/schema";
 import { randomUUID } from "crypto";
 import bcrypt from "bcryptjs";
 
@@ -32,6 +32,18 @@ export interface IStorage {
   createGoal(goal: Partial<StudyGoal>): Promise<StudyGoal>;
   updateGoal(id: number, data: Partial<StudyGoal>): Promise<StudyGoal>;
   deleteGoal(id: number): Promise<void>;
+  
+  // Reminders
+  getReminders(userId: string, filters?: { type?: string; start?: Date; end?: Date }): Promise<Reminder[]>;
+  getReminder(id: string): Promise<Reminder | undefined>;
+  createReminder(reminder: Partial<Reminder>): Promise<Reminder>;
+  updateReminder(id: string, data: Partial<Reminder>): Promise<Reminder>;
+  deleteReminder(id: string): Promise<void>;
+  
+  // Reminder Notifications
+  getRemindersForDispatch(now: Date): Promise<Reminder[]>;
+  createReminderNotification(notification: Partial<ReminderNotification>): Promise<ReminderNotification>;
+  hasNotificationInWindow(reminderId: string, windowStart: Date, windowEnd: Date): Promise<boolean>;
 }
 
 export class MemStorage implements IStorage {
@@ -40,10 +52,13 @@ export class MemStorage implements IStorage {
   private events: Map<number, Event> = new Map();
   private tasks: Map<number, Task> = new Map();
   private goals: Map<number, StudyGoal> = new Map();
+  private reminders: Map<string, Reminder> = new Map();
+  private reminderNotifications: Map<number, ReminderNotification> = new Map();
   private nextDisciplineId = 1;
   private nextEventId = 1;
   private nextTaskId = 1;
   private nextGoalId = 1;
+  private nextNotificationId = 1;
 
   async getUser(id: string): Promise<User | undefined> {
     return this.users.get(id);
@@ -208,6 +223,94 @@ export class MemStorage implements IStorage {
 
   async deleteGoal(id: number): Promise<void> {
     this.goals.delete(id);
+  }
+
+  async getReminders(userId: string, filters?: { type?: string; start?: Date; end?: Date }): Promise<Reminder[]> {
+    let results = Array.from(this.reminders.values()).filter((r) => r.userId === userId);
+    
+    if (filters?.type) {
+      results = results.filter((r) => r.type === filters.type);
+    }
+    
+    if (filters?.start) {
+      results = results.filter((r) => r.dueAt && new Date(r.dueAt) >= filters.start!);
+    }
+    
+    if (filters?.end) {
+      results = results.filter((r) => r.dueAt && new Date(r.dueAt) <= filters.end!);
+    }
+    
+    return results.sort((a, b) => {
+      const dateA = a.dueAt ? new Date(a.dueAt).getTime() : 0;
+      const dateB = b.dueAt ? new Date(b.dueAt).getTime() : 0;
+      return dateA - dateB;
+    });
+  }
+
+  async getReminder(id: string): Promise<Reminder | undefined> {
+    return this.reminders.get(id);
+  }
+
+  async createReminder(data: Partial<Reminder>): Promise<Reminder> {
+    const reminder: Reminder = {
+      id: randomUUID(),
+      userId: data.userId || "",
+      type: data.type || "exam_assignment",
+      title: data.title || "",
+      description: data.description,
+      dueAt: data.dueAt || new Date(),
+      remindBeforeMinutes: data.remindBeforeMinutes ?? 0,
+      repeat: data.repeat || "none",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    this.reminders.set(reminder.id, reminder);
+    return reminder;
+  }
+
+  async updateReminder(id: string, data: Partial<Reminder>): Promise<Reminder> {
+    const reminder = this.reminders.get(id);
+    if (!reminder) throw new Error("Reminder not found");
+    const updated = { ...reminder, ...data, updatedAt: new Date() };
+    this.reminders.set(id, updated);
+    return updated;
+  }
+
+  async deleteReminder(id: string): Promise<void> {
+    this.reminders.delete(id);
+  }
+
+  async getRemindersForDispatch(now: Date): Promise<Reminder[]> {
+    return Array.from(this.reminders.values()).filter((reminder) => {
+      if (!reminder.dueAt) return false;
+      
+      const dueAt = new Date(reminder.dueAt);
+      const notifyAt = new Date(dueAt.getTime() - reminder.remindBeforeMinutes * 60000);
+      const windowEnd = new Date(dueAt.getTime() + 60000); // 1 minute after due_at
+      
+      return now >= notifyAt && now < windowEnd;
+    });
+  }
+
+  async createReminderNotification(data: Partial<ReminderNotification>): Promise<ReminderNotification> {
+    const notification: ReminderNotification = {
+      id: this.nextNotificationId++,
+      reminderId: data.reminderId || "",
+      notifiedAt: new Date(),
+    };
+    this.reminderNotifications.set(notification.id, notification);
+    return notification;
+  }
+
+  async hasNotificationInWindow(reminderId: string, windowStart: Date, windowEnd: Date): Promise<boolean> {
+    const notifications = Array.from(this.reminderNotifications.values()).filter(
+      (n) => n.reminderId === reminderId && n.notifiedAt
+    );
+    
+    return notifications.some((n) => {
+      const notifiedAt = new Date(n.notifiedAt!);
+      return notifiedAt >= windowStart && notifiedAt <= windowEnd;
+    });
   }
 }
 

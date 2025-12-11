@@ -5,6 +5,7 @@ import {
   BookOpen,
   CheckSquare,
   Target,
+  Bell,
   LogOut,
 } from "lucide-react";
 import {
@@ -47,6 +48,11 @@ const menuItems = [
     title: "Metas",
     url: "/metas",
     icon: Target,
+  },
+  {
+    title: "Lembretes",
+    url: "/lembretes",
+    icon: Bell,
   },
 ];
 
