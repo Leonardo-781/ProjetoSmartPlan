@@ -222,13 +222,15 @@ export async function registerRoutes(
   app.get("/api/reminders", async (req: Request, res: Response) => {
     const uid = checkAuth(req, res);
     if (!uid) return;
-    const filters: any = {};
-    if (req.query.type) filters.type = req.query.type;
+    const filters: { type?: string; startDate?: Date; endDate?: Date } = {};
+    if (req.query.type) filters.type = req.query.type as string;
     if (req.query.startDate) filters.startDate = new Date(req.query.startDate as string);
     if (req.query.endDate) filters.endDate = new Date(req.query.endDate as string);
     const reminders = await storage.getReminders(uid, filters);
     res.json(reminders);
   });
+
+  const VALID_REMINDER_TYPES = ["exam_assignment", "work_meeting"];
 
   app.post("/api/reminders", async (req: Request, res: Response) => {
     const uid = checkAuth(req, res);
@@ -240,7 +242,7 @@ export async function registerRoutes(
       return res.status(400).json({ detail: "Title, type, and dueAt are required" });
     }
     
-    if (!["exam_assignment", "work_meeting"].includes(type)) {
+    if (!VALID_REMINDER_TYPES.includes(type)) {
       return res.status(400).json({ detail: "Invalid type. Must be 'exam_assignment' or 'work_meeting'" });
     }
     
@@ -281,7 +283,7 @@ export async function registerRoutes(
     }
     
     // Validation
-    if (req.body.type && !["exam_assignment", "work_meeting"].includes(req.body.type)) {
+    if (req.body.type && !VALID_REMINDER_TYPES.includes(req.body.type)) {
       return res.status(400).json({ detail: "Invalid type. Must be 'exam_assignment' or 'work_meeting'" });
     }
     
@@ -328,6 +330,14 @@ export async function registerRoutes(
       return date.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
     };
     
+    // Escape special characters for ICS format (RFC 5545)
+    const escapeICS = (text: string) => {
+      return text.replace(/\\/g, '\\\\')
+                 .replace(/;/g, '\\;')
+                 .replace(/,/g, '\\,')
+                 .replace(/\n/g, '\\n');
+    };
+    
     const icsContent = [
       'BEGIN:VCALENDAR',
       'VERSION:2.0',
@@ -338,10 +348,10 @@ export async function registerRoutes(
       `UID:reminder-${reminder.id}@projetosmartplan`,
       `DTSTAMP:${formatICSDate(new Date())}`,
       `DTSTART:${formatICSDate(dueDate)}`,
-      `SUMMARY:${reminder.title}`,
-      reminder.description ? `DESCRIPTION:${reminder.description.replace(/\n/g, '\\n')}` : '',
+      `SUMMARY:${escapeICS(reminder.title)}`,
+      reminder.description ? `DESCRIPTION:${escapeICS(reminder.description)}` : '',
       `CATEGORIES:${reminder.type === 'exam_assignment' ? 'Prova/Trabalho' : 'Reunião de Trabalho'}`,
-      reminder.remindBeforeMinutes ? `BEGIN:VALARM\nACTION:DISPLAY\nDESCRIPTION:${reminder.title}\nTRIGGER:-PT${reminder.remindBeforeMinutes}M\nEND:VALARM` : '',
+      reminder.remindBeforeMinutes ? `BEGIN:VALARM\nACTION:DISPLAY\nDESCRIPTION:${escapeICS(reminder.title)}\nTRIGGER:-PT${reminder.remindBeforeMinutes}M\nEND:VALARM` : '',
       'END:VEVENT',
       'END:VCALENDAR'
     ].filter(line => line).join('\r\n');
