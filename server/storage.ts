@@ -287,10 +287,12 @@ export class MemStorage implements IStorage {
   }
 
   async getRemindersDueForNotification(now: Date): Promise<Reminder[]> {
+    const NOTIFICATION_GRACE_PERIOD_MS = 60 * 1000; // 1 minute grace period after due time
+    
     return Array.from(this.reminders.values()).filter((reminder) => {
       const dueAt = new Date(reminder.dueAt);
       const notifyAt = new Date(dueAt.getTime() - reminder.remindBeforeMinutes * 60 * 1000);
-      const notifyUntil = new Date(dueAt.getTime() + 60 * 1000); // 1 minute after due
+      const notifyUntil = new Date(dueAt.getTime() + NOTIFICATION_GRACE_PERIOD_MS);
       
       return now >= notifyAt && now < notifyUntil;
     });

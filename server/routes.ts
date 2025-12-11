@@ -242,6 +242,14 @@ export async function registerRoutes(
       return res.status(400).json({ detail: "Title and dueAt are required" });
     }
     
+    if (req.body.type && !["exam_assignment", "work_meeting"].includes(req.body.type)) {
+      return res.status(400).json({ detail: "Invalid type. Must be 'exam_assignment' or 'work_meeting'" });
+    }
+    
+    if (req.body.repeat && !["none", "daily", "weekly", "monthly"].includes(req.body.repeat)) {
+      return res.status(400).json({ detail: "Invalid repeat. Must be 'none', 'daily', 'weekly', or 'monthly'" });
+    }
+    
     if (req.body.remindBeforeMinutes !== undefined && req.body.remindBeforeMinutes < 0) {
       return res.status(400).json({ detail: "remindBeforeMinutes must be >= 0" });
     }
@@ -280,6 +288,14 @@ export async function registerRoutes(
     }
     
     // Validation
+    if (req.body.type && !["exam_assignment", "work_meeting"].includes(req.body.type)) {
+      return res.status(400).json({ detail: "Invalid type. Must be 'exam_assignment' or 'work_meeting'" });
+    }
+    
+    if (req.body.repeat && !["none", "daily", "weekly", "monthly"].includes(req.body.repeat)) {
+      return res.status(400).json({ detail: "Invalid repeat. Must be 'none', 'daily', 'weekly', or 'monthly'" });
+    }
+    
     if (req.body.remindBeforeMinutes !== undefined && req.body.remindBeforeMinutes < 0) {
       return res.status(400).json({ detail: "remindBeforeMinutes must be >= 0" });
     }
