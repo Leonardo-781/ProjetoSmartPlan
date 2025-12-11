@@ -1,4 +1,4 @@
-import { type User, type Discipline, type Event, type Task, type StudyGoal } from "@shared/schema";
+import { type User, type Discipline, type Event, type Task, type StudyGoal, type Reminder, type ReminderNotification } from "@shared/schema";
 import { randomUUID } from "crypto";
 import bcrypt from "bcryptjs";
 
@@ -32,6 +32,17 @@ export interface IStorage {
   createGoal(goal: Partial<StudyGoal>): Promise<StudyGoal>;
   updateGoal(id: number, data: Partial<StudyGoal>): Promise<StudyGoal>;
   deleteGoal(id: number): Promise<void>;
+  
+  // Reminders
+  getReminders(userId: string, filters?: { type?: string; startDate?: Date; endDate?: Date }): Promise<Reminder[]>;
+  getReminder(id: string): Promise<Reminder | undefined>;
+  createReminder(reminder: Partial<Reminder>): Promise<Reminder>;
+  updateReminder(id: string, data: Partial<Reminder>): Promise<Reminder>;
+  deleteReminder(id: string): Promise<void>;
+  
+  // Reminder Notifications
+  createReminderNotification(notification: Partial<ReminderNotification>): Promise<ReminderNotification>;
+  getRemindersDueForNotification(now: Date): Promise<Reminder[]>;
 }
 
 export class MemStorage implements IStorage {
@@ -40,10 +51,13 @@ export class MemStorage implements IStorage {
   private events: Map<number, Event> = new Map();
   private tasks: Map<number, Task> = new Map();
   private goals: Map<number, StudyGoal> = new Map();
+  private reminders: Map<string, Reminder> = new Map();
+  private reminderNotifications: Map<number, ReminderNotification> = new Map();
   private nextDisciplineId = 1;
   private nextEventId = 1;
   private nextTaskId = 1;
   private nextGoalId = 1;
+  private nextNotificationId = 1;
 
   async getUser(id: string): Promise<User | undefined> {
     return this.users.get(id);
@@ -117,18 +131,18 @@ export class MemStorage implements IStorage {
     const event: Event = {
       id: this.nextEventId++,
       userId: data.userId || "",
-      disciplineId: data.disciplineId,
+      disciplineId: data.disciplineId ?? null,
       title: data.title || "",
-      description: data.description,
+      description: data.description ?? null,
       eventType: data.eventType || "aula",
       startDate: data.startDate || "",
-      startTime: data.startTime,
-      endTime: data.endTime,
-      location: data.location,
+      startTime: data.startTime ?? null,
+      endTime: data.endTime ?? null,
+      location: data.location ?? null,
       isRecurring: data.isRecurring || false,
-      recurrencePattern: data.recurrencePattern,
-      recurrenceDays: data.recurrenceDays,
-      recurrenceEndDate: data.recurrenceEndDate,
+      recurrencePattern: data.recurrencePattern ?? null,
+      recurrenceDays: data.recurrenceDays ?? null,
+      recurrenceEndDate: data.recurrenceEndDate ?? null,
       createdAt: new Date(),
     };
     this.events.set(event.id, event);
@@ -155,13 +169,13 @@ export class MemStorage implements IStorage {
     const task: Task = {
       id: this.nextTaskId++,
       userId: data.userId || "",
-      disciplineId: data.disciplineId,
+      disciplineId: data.disciplineId ?? null,
       title: data.title || "",
-      description: data.description,
+      description: data.description ?? null,
       priority: data.priority || "medium",
       status: data.status || "todo",
-      dueDate: data.dueDate,
-      completedAt: data.completedAt,
+      dueDate: data.dueDate ?? null,
+      completedAt: data.completedAt ?? null,
       createdAt: new Date(),
     };
     this.tasks.set(task.id, task);
@@ -208,6 +222,80 @@ export class MemStorage implements IStorage {
 
   async deleteGoal(id: number): Promise<void> {
     this.goals.delete(id);
+  }
+
+  async getReminders(userId: string, filters?: { type?: string; startDate?: Date; endDate?: Date }): Promise<Reminder[]> {
+    let reminders = Array.from(this.reminders.values()).filter((r) => r.userId === userId);
+    
+    if (filters?.type) {
+      reminders = reminders.filter((r) => r.type === filters.type);
+    }
+    
+    if (filters?.startDate) {
+      reminders = reminders.filter((r) => new Date(r.dueAt) >= filters.startDate!);
+    }
+    
+    if (filters?.endDate) {
+      reminders = reminders.filter((r) => new Date(r.dueAt) <= filters.endDate!);
+    }
+    
+    return reminders;
+  }
+
+  async getReminder(id: string): Promise<Reminder | undefined> {
+    return this.reminders.get(id);
+  }
+
+  async createReminder(data: Partial<Reminder>): Promise<Reminder> {
+    const reminder: Reminder = {
+      id: randomUUID(),
+      userId: data.userId || "",
+      type: data.type || "exam_assignment",
+      title: data.title || "",
+      description: data.description ?? null,
+      dueAt: data.dueAt || new Date(),
+      remindBeforeMinutes: data.remindBeforeMinutes ?? 30,
+      repeat: data.repeat || "none",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    this.reminders.set(reminder.id, reminder);
+    return reminder;
+  }
+
+  async updateReminder(id: string, data: Partial<Reminder>): Promise<Reminder> {
+    const reminder = this.reminders.get(id);
+    if (!reminder) throw new Error("Not found");
+    const updated = { ...reminder, ...data, updatedAt: new Date() };
+    this.reminders.set(id, updated);
+    return updated;
+  }
+
+  async deleteReminder(id: string): Promise<void> {
+    this.reminders.delete(id);
+  }
+
+  async createReminderNotification(data: Partial<ReminderNotification>): Promise<ReminderNotification> {
+    const notification: ReminderNotification = {
+      id: this.nextNotificationId++,
+      reminderId: data.reminderId || "",
+      notifiedAt: new Date(),
+      status: data.status || "sent",
+    };
+    this.reminderNotifications.set(notification.id, notification);
+    return notification;
+  }
+
+  async getRemindersDueForNotification(now: Date): Promise<Reminder[]> {
+    const NOTIFICATION_GRACE_PERIOD_MS = 60 * 1000; // 1 minute grace period after due time
+    
+    return Array.from(this.reminders.values()).filter((reminder) => {
+      const dueAt = new Date(reminder.dueAt);
+      const notifyAt = new Date(dueAt.getTime() - reminder.remindBeforeMinutes * 60 * 1000);
+      const notifyUntil = new Date(dueAt.getTime() + NOTIFICATION_GRACE_PERIOD_MS);
+      
+      return now >= notifyAt && now < notifyUntil;
+    });
   }
 }
 

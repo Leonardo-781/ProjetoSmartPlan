@@ -94,12 +94,35 @@ export const studyGoals = pgTable("study_goals", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Reminders table
+export const reminders = pgTable("reminders", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  type: varchar("type", { length: 50 }).notNull(), // 'exam_assignment', 'work_meeting'
+  title: varchar("title", { length: 255 }).notNull(),
+  description: text("description"),
+  dueAt: timestamp("due_at").notNull(),
+  remindBeforeMinutes: integer("remind_before_minutes").notNull().default(30),
+  repeat: varchar("repeat", { length: 20 }).notNull().default("none"), // 'none', 'daily', 'weekly', 'monthly'
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Reminder notifications table (log of sent notifications)
+export const reminderNotifications = pgTable("reminder_notifications", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  reminderId: varchar("reminder_id").notNull().references(() => reminders.id, { onDelete: "cascade" }),
+  notifiedAt: timestamp("notified_at").defaultNow(),
+  status: varchar("status", { length: 20 }).notNull().default("sent"), // 'sent', 'failed'
+});
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   disciplines: many(disciplines),
   events: many(events),
   tasks: many(tasks),
   studyGoals: many(studyGoals),
+  reminders: many(reminders),
 }));
 
 export const disciplinesRelations = relations(disciplines, ({ one, many }) => ({
@@ -140,6 +163,21 @@ export const studyGoalsRelations = relations(studyGoals, ({ one }) => ({
   }),
 }));
 
+export const remindersRelations = relations(reminders, ({ one, many }) => ({
+  user: one(users, {
+    fields: [reminders.userId],
+    references: [users.id],
+  }),
+  notifications: many(reminderNotifications),
+}));
+
+export const reminderNotificationsRelations = relations(reminderNotifications, ({ one }) => ({
+  reminder: one(reminders, {
+    fields: [reminderNotifications.reminderId],
+    references: [reminders.id],
+  }),
+}));
+
 // Zod schemas for validation
 export const insertUserSchema = createInsertSchema(users);
 export const insertDisciplineSchema = createInsertSchema(disciplines).omit({
@@ -160,6 +198,17 @@ export const insertStudyGoalSchema = createInsertSchema(studyGoals).omit({
   createdAt: true,
 });
 
+export const insertReminderSchema = createInsertSchema(reminders).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertReminderNotificationSchema = createInsertSchema(reminderNotifications).omit({
+  id: true,
+  notifiedAt: true,
+});
+
 // Types
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
@@ -175,3 +224,9 @@ export type Task = typeof tasks.$inferSelect;
 
 export type InsertStudyGoal = z.infer<typeof insertStudyGoalSchema>;
 export type StudyGoal = typeof studyGoals.$inferSelect;
+
+export type InsertReminder = z.infer<typeof insertReminderSchema>;
+export type Reminder = typeof reminders.$inferSelect;
+
+export type InsertReminderNotification = z.infer<typeof insertReminderNotificationSchema>;
+export type ReminderNotification = typeof reminderNotifications.$inferSelect;
