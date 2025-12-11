@@ -28,6 +28,7 @@ const REPEAT_FREQUENCY_MAP: Record<string, string> = {
   daily: "DAILY",
   weekly: "WEEKLY",
   monthly: "MONTHLY",
+  none: "", // Explicitly handle 'none'
 };
 
 /**
@@ -47,8 +48,10 @@ export function generateICS(reminder: Reminder): string {
   
   let rrule = "";
   if (reminder.repeat !== "none") {
-    const freq = REPEAT_FREQUENCY_MAP[reminder.repeat] || reminder.repeat.toUpperCase();
-    rrule = `RRULE:FREQ=${freq}\r\n`;
+    const freq = REPEAT_FREQUENCY_MAP[reminder.repeat];
+    if (freq) {
+      rrule = `RRULE:FREQ=${freq}\r\n`;
+    }
   }
   
   const icsLines = [

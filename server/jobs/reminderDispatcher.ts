@@ -60,7 +60,11 @@ export async function dispatchReminders(): Promise<void> {
 }
 
 // Allow running as standalone script
-if (import.meta.url === `file://${process.argv[1]}`) {
+// Check if this file is being executed directly
+const isMainModule = process.argv[1]?.endsWith('reminderDispatcher.ts') || 
+                     process.argv[1]?.endsWith('reminderDispatcher.js');
+
+if (isMainModule) {
   dispatchReminders()
     .then(() => {
       console.log("[ReminderDispatcher] Standalone execution completed");

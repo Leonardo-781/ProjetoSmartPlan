@@ -334,7 +334,8 @@ export async function registerRoutes(
       return res.status(403).json({ detail: "Forbidden" });
     }
     
-    const updateData: Partial<Pick<typeof existing, 'title' | 'description' | 'type' | 'dueAt' | 'remindBeforeMinutes' | 'repeat'>> = {};
+    type ReminderUpdateData = Partial<Pick<typeof existing, 'title' | 'description' | 'type' | 'dueAt' | 'remindBeforeMinutes' | 'repeat'>>;
+    const updateData: ReminderUpdateData = {};
     
     if (req.body.title !== undefined) {
       if (!req.body.title.trim()) {

@@ -67,13 +67,11 @@ export function ReminderForm({
     e.preventDefault();
     
     if (!title.trim()) {
-      alert("Título é obrigatório");
-      return;
+      return; // Form validation will handle this
     }
     
     if (!dueDate) {
-      alert("Data de vencimento é obrigatória");
-      return;
+      return; // Form validation will handle this
     }
     
     const [hours, minutes] = dueTime.split(":").map(Number);
