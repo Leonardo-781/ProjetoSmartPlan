@@ -204,7 +204,9 @@ export const insertReminderSchema = createInsertSchema(reminders)
     updatedAt: true,
   })
   .extend({
-    dueAt: z.string().transform((val) => new Date(val)),
+    dueAt: z.string().transform((val) => new Date(val)).refine((date) => !isNaN(date.getTime()), {
+      message: "Invalid date format",
+    }),
     remindBeforeMinutes: z.number().min(0, "Remind before minutes must be >= 0"),
     type: z.enum(["exam_assignment", "work_meeting"], {
       errorMap: () => ({ message: "Type must be exam_assignment or work_meeting" }),

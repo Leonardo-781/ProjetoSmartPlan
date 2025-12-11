@@ -40,7 +40,12 @@ export function generateICS(reminder: Reminder): string {
   
   // Add recurrence rule if needed
   if (reminder.repeat !== 'none') {
-    const freq = reminder.repeat.toUpperCase();
+    const freqMap: Record<string, string> = {
+      daily: 'DAILY',
+      weekly: 'WEEKLY',
+      monthly: 'MONTHLY',
+    };
+    const freq = freqMap[reminder.repeat] || reminder.repeat.toUpperCase();
     lines.push(`RRULE:FREQ=${freq}`);
   }
   

@@ -324,6 +324,7 @@ export async function registerRoutes(
     const uid = checkAuth(req, res);
     if (!uid) return;
     
+    const ONE_MINUTE_MS = 60000;
     const now = new Date();
     const remindersToNotify = await storage.getRemindersForDispatch(now);
     
@@ -331,8 +332,8 @@ export async function registerRoutes(
     for (const reminder of remindersToNotify) {
       // Check if already notified in this window
       const dueAt = new Date(reminder.dueAt);
-      const notifyAt = new Date(dueAt.getTime() - reminder.remindBeforeMinutes * 60000);
-      const windowEnd = new Date(dueAt.getTime() + 60000);
+      const notifyAt = new Date(dueAt.getTime() - reminder.remindBeforeMinutes * ONE_MINUTE_MS);
+      const windowEnd = new Date(dueAt.getTime() + ONE_MINUTE_MS);
       
       const alreadyNotified = await storage.hasNotificationInWindow(
         reminder.id,

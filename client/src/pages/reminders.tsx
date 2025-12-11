@@ -267,7 +267,7 @@ export default function RemindersPage() {
                   </div>
                   <div className="space-y-1 mt-1">
                     {dayReminders.slice(0, 2).map((reminder) => {
-                      const config = typeConfig[reminder.type as keyof typeof typeConfig];
+                      const config = typeConfig[reminder.type as keyof typeof typeConfig] || typeConfig.exam_assignment;
                       return (
                         <div
                           key={reminder.id}
@@ -314,7 +314,7 @@ export default function RemindersPage() {
           ) : (
             <div className="space-y-3">
               {filteredReminders.map((reminder) => {
-                const config = typeConfig[reminder.type as keyof typeof typeConfig];
+                const config = typeConfig[reminder.type as keyof typeof typeConfig] || typeConfig.exam_assignment;
                 const Icon = config.icon;
                 
                 return (
