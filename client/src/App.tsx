@@ -20,6 +20,7 @@ import CalendarPage from "@/pages/calendar";
 import DisciplinesPage from "@/pages/disciplines";
 import TasksPage from "@/pages/tasks";
 import GoalsPage from "@/pages/goals";
+import RemindersPage from "@/pages/reminders";
 import NotFound from "@/pages/not-found";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -87,6 +88,7 @@ function Router() {
         <Route path="/disciplinas" component={DisciplinesPage} />
         <Route path="/tarefas" component={TasksPage} />
         <Route path="/metas" component={GoalsPage} />
+        <Route path="/lembretes" component={RemindersPage} />
         <Route component={NotFound} />
       </Switch>
     </AuthenticatedLayout>
