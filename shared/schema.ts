@@ -199,10 +199,12 @@ export const insertStudyGoalSchema = createInsertSchema(studyGoals).omit({
 export const insertReminderSchema = createInsertSchema(reminders)
   .omit({
     id: true,
+    userId: true,
     createdAt: true,
     updatedAt: true,
   })
   .extend({
+    dueAt: z.string().transform((val) => new Date(val)),
     remindBeforeMinutes: z.number().min(0, "Remind before minutes must be >= 0"),
     type: z.enum(["exam_assignment", "work_meeting"], {
       errorMap: () => ({ message: "Type must be exam_assignment or work_meeting" }),
