@@ -94,12 +94,44 @@ export const studyGoals = pgTable("study_goals", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Reminders table
+export const reminders = pgTable("reminders", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  ownerEmail: varchar("owner_email", { length: 255 }).notNull(),
+  type: varchar("type", { length: 50 }).notNull(), // 'exam_assignment', 'work_meeting'
+  title: varchar("title", { length: 255 }).notNull(),
+  description: text("description"),
+  dueAt: timestamp("due_at", { mode: "date", withTimezone: true }).notNull(),
+  remindBeforeMinutes: integer("remind_before_minutes").notNull().default(30),
+  repeat: varchar("repeat", { length: 20 }).notNull().default("none"), // 'none', 'daily', 'weekly', 'monthly'
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Reminder notifications table
+export const reminderNotifications = pgTable("reminder_notifications", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  reminderId: varchar("reminder_id").notNull().references(() => reminders.id, { onDelete: "cascade" }),
+  notifiedAt: timestamp("notified_at").defaultNow(),
+});
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   disciplines: many(disciplines),
   events: many(events),
   tasks: many(tasks),
   studyGoals: many(studyGoals),
+}));
+
+export const remindersRelations = relations(reminders, ({ many }) => ({
+  notifications: many(reminderNotifications),
+}));
+
+export const reminderNotificationsRelations = relations(reminderNotifications, ({ one }) => ({
+  reminder: one(reminders, {
+    fields: [reminderNotifications.reminderId],
+    references: [reminders.id],
+  }),
 }));
 
 export const disciplinesRelations = relations(disciplines, ({ one, many }) => ({
@@ -160,6 +192,24 @@ export const insertStudyGoalSchema = createInsertSchema(studyGoals).omit({
   createdAt: true,
 });
 
+export const insertReminderSchema = createInsertSchema(reminders).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  ownerEmail: z.string().email(),
+  type: z.enum(["exam_assignment", "work_meeting"]),
+  title: z.string().min(1),
+  dueAt: z.date(),
+  remindBeforeMinutes: z.number().min(0).default(30),
+  repeat: z.enum(["none", "daily", "weekly", "monthly"]).default("none"),
+});
+
+export const insertReminderNotificationSchema = createInsertSchema(reminderNotifications).omit({
+  id: true,
+  notifiedAt: true,
+});
+
 // Types
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
@@ -175,3 +225,9 @@ export type Task = typeof tasks.$inferSelect;
 
 export type InsertStudyGoal = z.infer<typeof insertStudyGoalSchema>;
 export type StudyGoal = typeof studyGoals.$inferSelect;
+
+export type InsertReminder = z.infer<typeof insertReminderSchema>;
+export type Reminder = typeof reminders.$inferSelect;
+
+export type InsertReminderNotification = z.infer<typeof insertReminderNotificationSchema>;
+export type ReminderNotification = typeof reminderNotifications.$inferSelect;
