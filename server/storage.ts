@@ -1,4 +1,4 @@
-import { type User, type Discipline, type Event, type Task, type StudyGoal } from "@shared/schema";
+import { type User, type Discipline, type Event, type Task, type StudyGoal, type Reminder, type ReminderNotification } from "@shared/schema";
 import { randomUUID } from "crypto";
 import bcrypt from "bcryptjs";
 
@@ -32,6 +32,18 @@ export interface IStorage {
   createGoal(goal: Partial<StudyGoal>): Promise<StudyGoal>;
   updateGoal(id: number, data: Partial<StudyGoal>): Promise<StudyGoal>;
   deleteGoal(id: number): Promise<void>;
+  
+  // Reminders
+  getReminders(userId: string, filters?: { type?: string; start?: Date; end?: Date }): Promise<Reminder[]>;
+  getReminder(id: number): Promise<Reminder | undefined>;
+  createReminder(reminder: Partial<Reminder>): Promise<Reminder>;
+  updateReminder(id: number, data: Partial<Reminder>): Promise<Reminder>;
+  deleteReminder(id: number): Promise<void>;
+  
+  // Reminder Notifications
+  getReminderNotifications(reminderId: number): Promise<ReminderNotification[]>;
+  createReminderNotification(notification: Partial<ReminderNotification>): Promise<ReminderNotification>;
+  getRemindersForDispatch(now: Date): Promise<Reminder[]>;
 }
 
 export class MemStorage implements IStorage {
@@ -40,10 +52,14 @@ export class MemStorage implements IStorage {
   private events: Map<number, Event> = new Map();
   private tasks: Map<number, Task> = new Map();
   private goals: Map<number, StudyGoal> = new Map();
+  private reminders: Map<number, Reminder> = new Map();
+  private reminderNotifications: Map<number, ReminderNotification> = new Map();
   private nextDisciplineId = 1;
   private nextEventId = 1;
   private nextTaskId = 1;
   private nextGoalId = 1;
+  private nextReminderId = 1;
+  private nextReminderNotificationId = 1;
 
   async getUser(id: string): Promise<User | undefined> {
     return this.users.get(id);
@@ -208,6 +224,104 @@ export class MemStorage implements IStorage {
 
   async deleteGoal(id: number): Promise<void> {
     this.goals.delete(id);
+  }
+
+  async getReminders(userId: string, filters?: { type?: string; start?: Date; end?: Date }): Promise<Reminder[]> {
+    let result = Array.from(this.reminders.values()).filter((r) => r.userId === userId);
+    
+    if (filters?.type) {
+      result = result.filter((r) => r.type === filters.type);
+    }
+    if (filters?.start) {
+      result = result.filter((r) => r.dueAt >= filters.start);
+    }
+    if (filters?.end) {
+      result = result.filter((r) => r.dueAt <= filters.end);
+    }
+    
+    return result;
+  }
+
+  async getReminder(id: number): Promise<Reminder | undefined> {
+    return this.reminders.get(id);
+  }
+
+  async createReminder(data: Partial<Reminder>): Promise<Reminder> {
+    const reminder: Reminder = {
+      id: this.nextReminderId++,
+      userId: data.userId || "",
+      type: data.type || "exam_assignment",
+      title: data.title || "",
+      description: data.description || null,
+      dueAt: data.dueAt || new Date(),
+      remindBeforeMinutes: data.remindBeforeMinutes ?? 0,
+      repeat: data.repeat || "none",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    this.reminders.set(reminder.id, reminder);
+    return reminder;
+  }
+
+  async updateReminder(id: number, data: Partial<Reminder>): Promise<Reminder> {
+    const reminder = this.reminders.get(id);
+    if (!reminder) throw new Error("Not found");
+    const updated = { ...reminder, ...data, updatedAt: new Date() };
+    this.reminders.set(id, updated);
+    return updated;
+  }
+
+  async deleteReminder(id: number): Promise<void> {
+    this.reminders.delete(id);
+    // Delete associated notifications
+    for (const [notifId, notif] of this.reminderNotifications.entries()) {
+      if (notif.reminderId === id) {
+        this.reminderNotifications.delete(notifId);
+      }
+    }
+  }
+
+  async getReminderNotifications(reminderId: number): Promise<ReminderNotification[]> {
+    return Array.from(this.reminderNotifications.values()).filter(
+      (n) => n.reminderId === reminderId
+    );
+  }
+
+  async createReminderNotification(data: Partial<ReminderNotification>): Promise<ReminderNotification> {
+    const notification: ReminderNotification = {
+      id: this.nextReminderNotificationId++,
+      reminderId: data.reminderId || 0,
+      notifiedAt: new Date(),
+    };
+    this.reminderNotifications.set(notification.id, notification);
+    return notification;
+  }
+
+  async getRemindersForDispatch(now: Date): Promise<Reminder[]> {
+    const reminders = Array.from(this.reminders.values());
+    const result: Reminder[] = [];
+
+    for (const reminder of reminders) {
+      const notifyTime = new Date(reminder.dueAt.getTime() - reminder.remindBeforeMinutes * 60 * 1000);
+      const windowEnd = new Date(reminder.dueAt.getTime() + 60 * 1000); // 1 minute after due
+      
+      // Check if current time is within notification window
+      if (now >= notifyTime && now < windowEnd) {
+        // Check if not already notified
+        const notifications = await this.getReminderNotifications(reminder.id);
+        const alreadyNotified = notifications.some((n) => {
+          const notifTime = n.notifiedAt || new Date(0);
+          // Check if notification was sent within the last hour (to avoid duplicate notifications)
+          return now.getTime() - notifTime.getTime() < 60 * 60 * 1000;
+        });
+        
+        if (!alreadyNotified) {
+          result.push(reminder);
+        }
+      }
+    }
+
+    return result;
   }
 }
 

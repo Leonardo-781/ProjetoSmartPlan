@@ -218,5 +218,138 @@ export async function registerRoutes(
     res.json({ ok: true });
   });
 
+  // Reminders middleware
+  const checkRemindersEnabled = (req: Request, res: Response) => {
+    const enabled = process.env.ENABLE_REMINDERS !== "false";
+    if (!enabled) {
+      res.status(403).json({ detail: "Reminders module is disabled" });
+      return false;
+    }
+    return true;
+  };
+
+  // Reminders
+  app.get("/api/reminders", async (req: Request, res: Response) => {
+    if (!checkRemindersEnabled(req, res)) return;
+    const uid = checkAuth(req, res);
+    if (!uid) return;
+    
+    const filters: { type?: string; start?: Date; end?: Date } = {};
+    if (req.query.type) filters.type = req.query.type as string;
+    if (req.query.start) filters.start = new Date(req.query.start as string);
+    if (req.query.end) filters.end = new Date(req.query.end as string);
+    
+    const reminders = await storage.getReminders(uid, filters);
+    res.json(reminders);
+  });
+
+  app.post("/api/reminders", async (req: Request, res: Response) => {
+    if (!checkRemindersEnabled(req, res)) return;
+    const uid = checkAuth(req, res);
+    if (!uid) return;
+    
+    // Validate required fields
+    if (!req.body.title || !req.body.dueAt) {
+      return res.status(400).json({ detail: "Title and dueAt are required" });
+    }
+    
+    // Validate remindBeforeMinutes
+    const remindBeforeMinutes = req.body.remindBeforeMinutes ?? 0;
+    if (remindBeforeMinutes < 0) {
+      return res.status(400).json({ detail: "remindBeforeMinutes must be >= 0" });
+    }
+    
+    const reminder = await storage.createReminder({ 
+      ...req.body, 
+      userId: uid,
+      dueAt: new Date(req.body.dueAt),
+      remindBeforeMinutes,
+    });
+    res.json(reminder);
+  });
+
+  app.get("/api/reminders/:id", async (req: Request, res: Response) => {
+    if (!checkRemindersEnabled(req, res)) return;
+    const uid = checkAuth(req, res);
+    if (!uid) return;
+    
+    const reminder = await storage.getReminder(parseInt(req.params.id));
+    if (!reminder || reminder.userId !== uid) {
+      return res.status(404).json({ detail: "Reminder not found" });
+    }
+    
+    res.json(reminder);
+  });
+
+  app.put("/api/reminders/:id", async (req: Request, res: Response) => {
+    if (!checkRemindersEnabled(req, res)) return;
+    const uid = checkAuth(req, res);
+    if (!uid) return;
+    
+    const reminder = await storage.getReminder(parseInt(req.params.id));
+    if (!reminder || reminder.userId !== uid) {
+      return res.status(404).json({ detail: "Reminder not found" });
+    }
+    
+    // Validate remindBeforeMinutes if provided
+    if (req.body.remindBeforeMinutes !== undefined && req.body.remindBeforeMinutes < 0) {
+      return res.status(400).json({ detail: "remindBeforeMinutes must be >= 0" });
+    }
+    
+    const updateData = { ...req.body };
+    if (req.body.dueAt) {
+      updateData.dueAt = new Date(req.body.dueAt);
+    }
+    
+    const updated = await storage.updateReminder(parseInt(req.params.id), updateData);
+    res.json(updated);
+  });
+
+  app.delete("/api/reminders/:id", async (req: Request, res: Response) => {
+    if (!checkRemindersEnabled(req, res)) return;
+    const uid = checkAuth(req, res);
+    if (!uid) return;
+    
+    const reminder = await storage.getReminder(parseInt(req.params.id));
+    if (!reminder || reminder.userId !== uid) {
+      return res.status(404).json({ detail: "Reminder not found" });
+    }
+    
+    await storage.deleteReminder(parseInt(req.params.id));
+    res.json({ ok: true });
+  });
+
+  app.get("/api/reminders/:id/export.ics", async (req: Request, res: Response) => {
+    if (!checkRemindersEnabled(req, res)) return;
+    const uid = checkAuth(req, res);
+    if (!uid) return;
+    
+    const reminder = await storage.getReminder(parseInt(req.params.id));
+    if (!reminder || reminder.userId !== uid) {
+      return res.status(404).json({ detail: "Reminder not found" });
+    }
+    
+    const { generateICS } = await import("./utils/ics");
+    const icsContent = generateICS(reminder);
+    
+    res.setHeader("Content-Type", "text/calendar; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="reminder-${reminder.id}.ics"`);
+    res.send(icsContent);
+  });
+
+  app.post("/api/reminders/dispatch", async (req: Request, res: Response) => {
+    if (!checkRemindersEnabled(req, res)) return;
+    const uid = checkAuth(req, res);
+    if (!uid) return;
+    
+    const { dispatchReminders } = await import("./jobs/reminderDispatcher");
+    const result = await dispatchReminders();
+    
+    res.json({
+      success: true,
+      ...result,
+    });
+  });
+
   return httpServer;
 }
