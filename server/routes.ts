@@ -334,13 +334,46 @@ export async function registerRoutes(
       return res.status(403).json({ detail: "Forbidden" });
     }
     
-    const updateData: any = {};
-    if (req.body.title !== undefined) updateData.title = req.body.title;
+    const updateData: Partial<Pick<typeof existing, 'title' | 'description' | 'type' | 'dueAt' | 'remindBeforeMinutes' | 'repeat'>> = {};
+    
+    if (req.body.title !== undefined) {
+      if (!req.body.title.trim()) {
+        return res.status(400).json({ detail: "title cannot be empty" });
+      }
+      updateData.title = req.body.title;
+    }
+    
     if (req.body.description !== undefined) updateData.description = req.body.description;
-    if (req.body.type !== undefined) updateData.type = req.body.type;
-    if (req.body.dueAt !== undefined) updateData.dueAt = new Date(req.body.dueAt);
-    if (req.body.remindBeforeMinutes !== undefined) updateData.remindBeforeMinutes = req.body.remindBeforeMinutes;
-    if (req.body.repeat !== undefined) updateData.repeat = req.body.repeat;
+    
+    if (req.body.type !== undefined) {
+      if (!["exam_assignment", "work_meeting"].includes(req.body.type)) {
+        return res.status(400).json({ detail: "type must be exam_assignment or work_meeting" });
+      }
+      updateData.type = req.body.type;
+    }
+    
+    if (req.body.dueAt !== undefined) {
+      const dueAt = new Date(req.body.dueAt);
+      if (isNaN(dueAt.getTime())) {
+        return res.status(400).json({ detail: "dueAt must be a valid date" });
+      }
+      updateData.dueAt = dueAt;
+    }
+    
+    if (req.body.remindBeforeMinutes !== undefined) {
+      const minutes = Number(req.body.remindBeforeMinutes);
+      if (isNaN(minutes) || minutes < 0) {
+        return res.status(400).json({ detail: "remindBeforeMinutes must be >= 0" });
+      }
+      updateData.remindBeforeMinutes = minutes;
+    }
+    
+    if (req.body.repeat !== undefined) {
+      if (!["none", "daily", "weekly", "monthly"].includes(req.body.repeat)) {
+        return res.status(400).json({ detail: "repeat must be none, daily, weekly, or monthly" });
+      }
+      updateData.repeat = req.body.repeat;
+    }
     
     const reminder = await storage.updateReminder(req.params.id, updateData);
     res.json(reminder);
@@ -400,9 +433,10 @@ export async function registerRoutes(
     try {
       await dispatchReminders();
       res.json({ success: true, message: "Reminders dispatched successfully" });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error dispatching reminders:", error);
-      res.status(500).json({ detail: "Failed to dispatch reminders", error: error.message });
+      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      res.status(500).json({ detail: "Failed to dispatch reminders", error: errorMessage });
     }
   });
 

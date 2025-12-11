@@ -24,6 +24,12 @@ function escapeICSText(text: string): string {
     .replace(/\n/g, "\\n");
 }
 
+const REPEAT_FREQUENCY_MAP: Record<string, string> = {
+  daily: "DAILY",
+  weekly: "WEEKLY",
+  monthly: "MONTHLY",
+};
+
 /**
  * Generates an ICS (iCalendar) file content for a reminder
  */
@@ -41,7 +47,7 @@ export function generateICS(reminder: Reminder): string {
   
   let rrule = "";
   if (reminder.repeat !== "none") {
-    const freq = reminder.repeat.toUpperCase();
+    const freq = REPEAT_FREQUENCY_MAP[reminder.repeat] || reminder.repeat.toUpperCase();
     rrule = `RRULE:FREQ=${freq}\r\n`;
   }
   

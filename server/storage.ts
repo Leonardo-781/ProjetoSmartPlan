@@ -272,10 +272,11 @@ export class MemStorage implements IStorage {
   }
 
   async getRemindersForDispatch(now: Date): Promise<Reminder[]> {
+    const ONE_MINUTE_MS = 60 * 1000;
     return Array.from(this.reminders.values()).filter((r) => {
       if (!r.dueAt) return false;
-      const remindTime = new Date(r.dueAt.getTime() - r.remindBeforeMinutes * 60 * 1000);
-      const windowEnd = new Date(r.dueAt.getTime() + 60 * 1000);
+      const remindTime = new Date(r.dueAt.getTime() - r.remindBeforeMinutes * ONE_MINUTE_MS);
+      const windowEnd = new Date(r.dueAt.getTime() + ONE_MINUTE_MS);
       return remindTime <= now && now < windowEnd;
     });
   }

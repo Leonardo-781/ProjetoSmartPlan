@@ -24,10 +24,11 @@ export async function dispatchReminders(): Promise<void> {
       const existingNotifications = await storage.getReminderNotifications(reminder.id);
       
       // Avoid duplicate notifications within the same minute
+      const ONE_MINUTE_MS = 60 * 1000;
       const recentNotification = existingNotifications.find((n) => {
         if (!n.notifiedAt) return false;
         const diff = now.getTime() - n.notifiedAt.getTime();
-        return diff < 60 * 1000; // Within last minute
+        return diff < ONE_MINUTE_MS;
       });
       
       if (recentNotification) {
