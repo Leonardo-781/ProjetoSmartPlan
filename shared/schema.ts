@@ -94,12 +94,28 @@ export const studyGoals = pgTable("study_goals", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Reminders table
+export const reminders = pgTable("reminders", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  type: varchar("type", { length: 50 }).notNull(), // 'exam_assignment' | 'work_meeting'
+  title: varchar("title", { length: 255 }).notNull(),
+  description: text("description"),
+  dueAt: timestamp("due_at").notNull(),
+  remindBeforeMinutes: integer("remind_before_minutes").notNull().default(15),
+  repeat: varchar("repeat", { length: 20 }).notNull().default("none"), // 'none' | 'daily' | 'weekly' | 'monthly'
+  lastNotifiedAt: timestamp("last_notified_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   disciplines: many(disciplines),
   events: many(events),
   tasks: many(tasks),
   studyGoals: many(studyGoals),
+  reminders: many(reminders),
 }));
 
 export const disciplinesRelations = relations(disciplines, ({ one, many }) => ({
@@ -140,6 +156,13 @@ export const studyGoalsRelations = relations(studyGoals, ({ one }) => ({
   }),
 }));
 
+export const remindersRelations = relations(reminders, ({ one }) => ({
+  user: one(users, {
+    fields: [reminders.userId],
+    references: [users.id],
+  }),
+}));
+
 // Zod schemas for validation
 export const insertUserSchema = createInsertSchema(users);
 export const insertDisciplineSchema = createInsertSchema(disciplines).omit({
@@ -159,6 +182,12 @@ export const insertStudyGoalSchema = createInsertSchema(studyGoals).omit({
   id: true,
   createdAt: true,
 });
+export const insertReminderSchema = createInsertSchema(reminders).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  lastNotifiedAt: true,
+});
 
 // Types
 export type UpsertUser = typeof users.$inferInsert;
@@ -175,3 +204,6 @@ export type Task = typeof tasks.$inferSelect;
 
 export type InsertStudyGoal = z.infer<typeof insertStudyGoalSchema>;
 export type StudyGoal = typeof studyGoals.$inferSelect;
+
+export type InsertReminder = z.infer<typeof insertReminderSchema>;
+export type Reminder = typeof reminders.$inferSelect;

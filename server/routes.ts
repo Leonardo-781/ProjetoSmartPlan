@@ -218,5 +218,164 @@ export async function registerRoutes(
     res.json({ ok: true });
   });
 
+  // Reminders
+  app.get("/api/reminders", async (req: Request, res: Response) => {
+    const uid = checkAuth(req, res);
+    if (!uid) return;
+    const filters: any = {};
+    if (req.query.type) filters.type = req.query.type;
+    if (req.query.startDate) filters.startDate = new Date(req.query.startDate as string);
+    if (req.query.endDate) filters.endDate = new Date(req.query.endDate as string);
+    const reminders = await storage.getReminders(uid, filters);
+    res.json(reminders);
+  });
+
+  app.post("/api/reminders", async (req: Request, res: Response) => {
+    const uid = checkAuth(req, res);
+    if (!uid) return;
+    const { title, type, dueAt, remindBeforeMinutes, description, repeat } = req.body;
+    
+    // Validation
+    if (!title || !type || !dueAt) {
+      return res.status(400).json({ detail: "Title, type, and dueAt are required" });
+    }
+    
+    if (!["exam_assignment", "work_meeting"].includes(type)) {
+      return res.status(400).json({ detail: "Invalid type. Must be 'exam_assignment' or 'work_meeting'" });
+    }
+    
+    if (remindBeforeMinutes !== undefined && (remindBeforeMinutes < 0 || !Number.isInteger(remindBeforeMinutes))) {
+      return res.status(400).json({ detail: "remindBeforeMinutes must be a non-negative integer" });
+    }
+    
+    const reminder = await storage.createReminder({ 
+      ...req.body, 
+      userId: uid,
+      dueAt: new Date(dueAt)
+    });
+    res.json(reminder);
+  });
+
+  app.get("/api/reminders/:id", async (req: Request, res: Response) => {
+    const uid = checkAuth(req, res);
+    if (!uid) return;
+    const reminder = await storage.getReminder(parseInt(req.params.id));
+    if (!reminder) {
+      return res.status(404).json({ detail: "Reminder not found" });
+    }
+    if (reminder.userId !== uid) {
+      return res.status(403).json({ detail: "Access denied" });
+    }
+    res.json(reminder);
+  });
+
+  app.put("/api/reminders/:id", async (req: Request, res: Response) => {
+    const uid = checkAuth(req, res);
+    if (!uid) return;
+    const existing = await storage.getReminder(parseInt(req.params.id));
+    if (!existing) {
+      return res.status(404).json({ detail: "Reminder not found" });
+    }
+    if (existing.userId !== uid) {
+      return res.status(403).json({ detail: "Access denied" });
+    }
+    
+    // Validation
+    if (req.body.type && !["exam_assignment", "work_meeting"].includes(req.body.type)) {
+      return res.status(400).json({ detail: "Invalid type. Must be 'exam_assignment' or 'work_meeting'" });
+    }
+    
+    if (req.body.remindBeforeMinutes !== undefined && (req.body.remindBeforeMinutes < 0 || !Number.isInteger(req.body.remindBeforeMinutes))) {
+      return res.status(400).json({ detail: "remindBeforeMinutes must be a non-negative integer" });
+    }
+    
+    if (req.body.dueAt) {
+      req.body.dueAt = new Date(req.body.dueAt);
+    }
+    
+    const reminder = await storage.updateReminder(parseInt(req.params.id), req.body);
+    res.json(reminder);
+  });
+
+  app.delete("/api/reminders/:id", async (req: Request, res: Response) => {
+    const uid = checkAuth(req, res);
+    if (!uid) return;
+    const existing = await storage.getReminder(parseInt(req.params.id));
+    if (!existing) {
+      return res.status(404).json({ detail: "Reminder not found" });
+    }
+    if (existing.userId !== uid) {
+      return res.status(403).json({ detail: "Access denied" });
+    }
+    await storage.deleteReminder(parseInt(req.params.id));
+    res.json({ ok: true });
+  });
+
+  app.get("/api/reminders/:id/export.ics", async (req: Request, res: Response) => {
+    const uid = checkAuth(req, res);
+    if (!uid) return;
+    const reminder = await storage.getReminder(parseInt(req.params.id));
+    if (!reminder) {
+      return res.status(404).json({ detail: "Reminder not found" });
+    }
+    if (reminder.userId !== uid) {
+      return res.status(403).json({ detail: "Access denied" });
+    }
+    
+    // Generate ICS file content
+    const dueDate = new Date(reminder.dueAt);
+    const formatICSDate = (date: Date) => {
+      return date.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+    };
+    
+    const icsContent = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//ProjetoSmartPlan//Reminders//EN',
+      'CALSCALE:GREGORIAN',
+      'METHOD:PUBLISH',
+      'BEGIN:VEVENT',
+      `UID:reminder-${reminder.id}@projetosmartplan`,
+      `DTSTAMP:${formatICSDate(new Date())}`,
+      `DTSTART:${formatICSDate(dueDate)}`,
+      `SUMMARY:${reminder.title}`,
+      reminder.description ? `DESCRIPTION:${reminder.description.replace(/\n/g, '\\n')}` : '',
+      `CATEGORIES:${reminder.type === 'exam_assignment' ? 'Prova/Trabalho' : 'Reunião de Trabalho'}`,
+      reminder.remindBeforeMinutes ? `BEGIN:VALARM\nACTION:DISPLAY\nDESCRIPTION:${reminder.title}\nTRIGGER:-PT${reminder.remindBeforeMinutes}M\nEND:VALARM` : '',
+      'END:VEVENT',
+      'END:VCALENDAR'
+    ].filter(line => line).join('\r\n');
+    
+    res.setHeader('Content-Type', 'text/calendar');
+    res.setHeader('Content-Disposition', `attachment; filename="reminder-${reminder.id}.ics"`);
+    res.send(icsContent);
+  });
+
+  app.post("/api/reminders/dispatch", async (req: Request, res: Response) => {
+    const uid = checkAuth(req, res);
+    if (!uid) return;
+    
+    const pendingReminders = await storage.getPendingReminders();
+    const userReminders = pendingReminders.filter(r => r.userId === uid);
+    
+    // Mark as notified and prepare notification messages
+    const notifications = [];
+    for (const reminder of userReminders) {
+      await storage.markReminderNotified(reminder.id);
+      notifications.push({
+        id: reminder.id,
+        title: reminder.title,
+        type: reminder.type,
+        dueAt: reminder.dueAt,
+        message: `Lembrete: ${reminder.title} - ${reminder.type === 'exam_assignment' ? 'Prova/Trabalho' : 'Reunião'} em ${new Date(reminder.dueAt).toLocaleString('pt-BR')}`
+      });
+    }
+    
+    res.json({
+      count: notifications.length,
+      notifications
+    });
+  });
+
   return httpServer;
 }
